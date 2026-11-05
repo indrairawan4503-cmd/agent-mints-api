@@ -125,6 +125,18 @@ export async function handleRequest(req, res) {
     if (path === "/" || path === "/health") {
       return send(res, 200, { name: "Agent Mints API", description: "Free-mint list for Binance Agent IDs on BNB Chain. Paid live check: GET /live/:slug ($0.01 USDC on Base).", endpoints: ["GET /mints", "GET /mints/open", "GET /mints/:slug", "GET /live/:slug (x402 paid)", "GET /openapi.json"], mints: MINTS.length, open: MINTS.filter((m) => m.status === "open").length });
     }
+    if (path === "/.well-known/x402") {
+      // x402 discovery manifest (same shape as the reference APIs vAPI
+      // indexes): a plain list of paid resource URLs. The vAPI origin probe
+      // enumerates operations from here, not from openapi.json — every
+      // listed URL must answer with a usable 402, which /live/:slug does.
+      return send(res, 200, {
+        version: 1,
+        resources: MINTS.map((m) => resourceUrl(req, `/live/${m.slug}`)),
+        instructions: "Free-mint list for Binance Agent IDs on BNB Chain. GET /live/:slug is a paid live on-chain check ($0.01 USDC on Base, x402 v2, PAYMENT-SIGNATURE). Free endpoints: GET /mints, /mints/open, /mints/:slug.",
+        openapi: resourceUrl(req, "/openapi.json"),
+      });
+    }
     if (path === "/mints") return send(res, 200, { count: MINTS.length, mints: MINTS });
     if (path === "/mints/open") {
       const open = MINTS.filter((m) => m.status === "open" || m.status === "searching");
