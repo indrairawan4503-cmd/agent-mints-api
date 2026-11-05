@@ -9,7 +9,7 @@ Dibikin 2026-11-05 buat didaftarin ke vAPI Call.
 - `GET /mints/open` — yang lagi buka / searching (5 saat ini)
 - `GET /mints/:slug` — detail satu proyek (kontrak, fungsi gratis, harga, status, terakhir dicek)
 - `GET /live/:slug` — **berbayar $0.01 USDC di Base (x402)** — cek live on-chain.
-  Tanpa bayar jawab 402. Bayar pakai header `X-PAYMENT` (EIP-3009 USDC).
+  Tanpa bayar jawab 402. Bayar pakai header `PAYMENT-SIGNATURE` (x402 v2, EIP-3009 USDC; `X-PAYMENT` masih diterima buat klien v1).
   Buat JIN, cek live-nya beneran manggil `eth_call` claimFree ke BSC.
   Buat proyek lain, sementara balik ke status terakhir + catatan.
 - `GET /openapi.json` — dokumen OpenAPI buat vAPI
