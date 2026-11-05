@@ -112,7 +112,7 @@ export async function handleRequest(req, res) {
       const spec = {
         openapi: "3.0.3",
         info: { title: "Agent Mints API", version: "1.0.0", description: "Free-mint list for Binance Agent IDs on BNB Chain (chain 56). GET /live/:slug is a paid x402 endpoint ($0.01 USDC on Base, payTo 0x77d9525EB3A6c2CA804098f2E1535daC8B3DA5E6)." },
-        servers: [{ url: "https://agent-mints.example" }],
+        servers: [{ url: "https://agent-mints-api.vercel.app" }],
         paths: {
           "/mints": { get: { summary: "List all tracked free mints", responses: { 200: { description: "Mint list" } } } },
           "/mints/open": { get: { summary: "List mints currently open or searching", responses: { 200: { description: "Open mint list" } } } },
