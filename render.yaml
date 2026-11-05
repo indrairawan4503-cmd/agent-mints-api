@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: agent-mints-api
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: node server.mjs
+    envVars:
+      - key: PORT
+        value: 10000
+    healthCheckPath: /health
