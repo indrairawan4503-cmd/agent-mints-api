@@ -1,0 +1,1 @@
+{"description":"Free-mint list for Binance Agent IDs on BNB Chain","engines":{"node":">=18"},"main":"server.mjs","name":"agent-mints-api","scripts":{"start":"node server.mjs"},"type":"module","version":"1.0.0"}
