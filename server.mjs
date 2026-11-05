@@ -93,7 +93,10 @@ async function liveCheck(slug) {
     liveNote: "Stored status from last manual check (see lastChecked). Live on-chain probe for this contract is not wired yet." };
 }
 
-const server = http.createServer(async (req, res) => {
+// Exported so Vercel can run the same routing as a serverless function
+// (see api/index.js). When run directly with `node server.mjs` it still
+// listens as a long-running server, for local use and Render.
+export async function handleRequest(req, res) {
   const url = new URL(req.url, "http://localhost");
   const path = url.pathname;
   try {
@@ -140,6 +143,9 @@ const server = http.createServer(async (req, res) => {
   } catch (e) {
     return send(res, 500, { error: e.message });
   }
-});
+}
 
-server.listen(PORT, () => console.log(`Agent Mints API on http://localhost:${PORT}`));
+if (process.argv[1] && process.argv[1].endsWith("server.mjs")) {
+  const server = http.createServer(handleRequest);
+  server.listen(PORT, () => console.log(`Agent Mints API on http://localhost:${PORT}`));
+}
