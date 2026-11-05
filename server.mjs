@@ -1,6 +1,9 @@
 // Agent Mints API — free-mint list for Binance Agent IDs (BSC, chain 56).
 // Free endpoints: GET / , GET /mints , GET /mints/open , GET /mints/:slug , GET /openapi.json
-// Paid endpoint (x402, $0.01 USDC on Base): GET /live/:slug — live on-chain check.
+// Paid endpoint (x402 v2, $0.01 USDC on Base): GET /live/:slug — live on-chain check.
+// Payment retry header is PAYMENT-SIGNATURE (v2); X-PAYMENT is still accepted
+// for older v1 clients. extra.name must be "USD Coin": that is the canonical
+// EIP-712 domain name USDC was deployed with on Base, and vAPI rejects "USDC".
 // Payout wallet: Raden's vAPI main wallet 0x77d9525EB3A6c2CA804098f2E1535daC8B3DA5E6
 // Run: node server.mjs   (PORT env, default 3000). No dependencies, Node 18+.
 import http from "node:http";
@@ -22,19 +25,39 @@ function send(res, code, obj, extraHeaders = {}) {
   res.end(body);
 }
 
-function paymentRequired(res, url) {
-  const accepts = [
-    {
-      scheme: "exact",
-      network: "eip155:8453",
-      amount: PRICE_ATOMIC,
-      asset: USDC_BASE,
-      payTo: PAY_TO,
-      maxTimeoutSeconds: 60,
-      extra: { name: "USDC", version: "2" },
-    },
-  ];
-  const payload = { x402Version: 1, error: "Payment Required", accepts };
+function resourceUrl(req, path) {
+  const host = req.headers["x-forwarded-host"] || req.headers.host || "agent-mints-api.vercel.app";
+  const proto = req.headers["x-forwarded-proto"] || "https";
+  return `${proto}://${host}${path}`;
+}
+
+function paymentRequirements(resource) {
+  // v2 accepts entry. amount is the v2 field; maxAmountRequired is also
+  // included because vAPI's conformance check looks for it, with the same
+  // value. resource is included both here and at the top level of the
+  // PaymentRequired payload, as vAPI requires it in the accepts entry.
+  return {
+    scheme: "exact",
+    network: "eip155:8453",
+    amount: PRICE_ATOMIC,
+    maxAmountRequired: PRICE_ATOMIC,
+    asset: USDC_BASE,
+    payTo: PAY_TO,
+    maxTimeoutSeconds: 60,
+    resource: { url: resource, description: "Live on-chain check for one mint ($0.01 USDC on Base)" },
+    extra: { name: "USD Coin", version: "2" },
+  };
+}
+
+function paymentRequired(req, res, path) {
+  const resource = resourceUrl(req, path);
+  const accepts = [paymentRequirements(resource)];
+  const payload = {
+    x402Version: 2,
+    error: "PAYMENT-SIGNATURE header is required",
+    resource: { url: resource, description: "Live on-chain check for one mint ($0.01 USDC on Base)", mimeType: "application/json" },
+    accepts,
+  };
   send(
     res,
     402,
@@ -45,18 +68,17 @@ function paymentRequired(res, url) {
   );
 }
 
-async function verifyAndSettle(paymentB64) {
+async function verifyAndSettle(paymentB64, resource) {
   let payment;
   try {
     payment = JSON.parse(Buffer.from(paymentB64, "base64").toString("utf8"));
   } catch {
-    return { ok: false, reason: "bad X-PAYMENT header" };
+    return { ok: false, reason: "bad payment header" };
   }
-  const body = { x402Version: 1, paymentPayload: payment, paymentRequirements: {
-    scheme: "exact", network: "eip155:8453", amount: PRICE_ATOMIC,
-    asset: USDC_BASE, payTo: PAY_TO, maxTimeoutSeconds: 60,
-    extra: { name: "USDC", version: "2" },
-  }};
+  // v2 facilitator shape. The client sends its chosen accepts entry as
+  // payment.accepted when present; fall back to our own requirements.
+  const requirements = payment.accepted || paymentRequirements(resource);
+  const body = { x402Version: 2, paymentPayload: payment, paymentRequirements: requirements };
   const v = await fetch(`${FACILITATOR}/verify`, {
     method: "POST", headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
@@ -67,7 +89,7 @@ async function verifyAndSettle(paymentB64) {
     body: JSON.stringify(body),
   }).then((r) => r.json());
   if (!s.success) return { ok: false, reason: s.errorReason || "settle failed" };
-  return { ok: true, txHash: s.txHash, network: s.network, payer: s.payer };
+  return { ok: true, txHash: s.transaction || s.txHash, network: s.network, payer: s.payer };
 }
 
 async function liveCheck(slug) {
@@ -117,7 +139,7 @@ export async function handleRequest(req, res) {
           "/mints": { get: { summary: "List all tracked free mints", responses: { 200: { description: "Mint list" } } } },
           "/mints/open": { get: { summary: "List mints currently open or searching", responses: { 200: { description: "Open mint list" } } } },
           "/mints/{slug}": { get: { summary: "One mint by slug", parameters: [{ name: "slug", in: "path", required: true, schema: { type: "string" } }], responses: { 200: { description: "Mint detail" }, 404: { description: "Unknown slug" } } } },
-          "/live/{slug}": { get: { summary: "Live on-chain check for one mint (paid, x402 $0.01 USDC on Base)", parameters: [{ name: "slug", in: "path", required: true, schema: { type: "string" } }], responses: { 200: { description: "Live status" }, 402: { description: "Payment Required — x402, see x-payment-info. Send X-PAYMENT header with a signed EIP-3009 authorization for $0.01 USDC on Base to 0x77d9525EB3A6c2CA804098f2E1535daC8B3DA5E6." }, 404: { description: "Unknown slug" } } } },
+          "/live/{slug}": { get: { summary: "Live on-chain check for one mint (paid, x402 v2 $0.01 USDC on Base)", parameters: [{ name: "slug", in: "path", required: true, schema: { type: "string" } }], "x-payment-info": { x402Version: 2, accepts: [{ scheme: "exact", network: "eip155:8453", amount: PRICE_ATOMIC, maxAmountRequired: PRICE_ATOMIC, asset: USDC_BASE, payTo: PAY_TO, maxTimeoutSeconds: 60, resource: { url: "https://agent-mints-api.vercel.app/live/{slug}", description: "Live on-chain check for one mint ($0.01 USDC on Base)" }, extra: { name: "USD Coin", version: "2" } }] }, responses: { 200: { description: "Live status" }, 402: { description: "Payment Required — x402 v2. Send PAYMENT-SIGNATURE header with a signed EIP-3009 authorization for $0.01 USDC on Base to 0x77d9525EB3A6c2CA804098f2E1535daC8B3DA5E6." }, 404: { description: "Unknown slug" } } } },
         },
       };
       return send(res, 200, spec);
@@ -132,12 +154,15 @@ export async function handleRequest(req, res) {
     if (l) {
       const slug = l[1];
       if (!MINTS.some((x) => x.slug === slug)) return send(res, 404, { error: "unknown slug", slugs: MINTS.map((x) => x.slug) });
-      const payment = req.headers["x-payment"];
-      if (!payment) return paymentRequired(res, url);
-      const settled = await verifyAndSettle(payment);
+      const payment = req.headers["payment-signature"] || req.headers["x-payment"];
+      if (!payment) return paymentRequired(req, res, path);
+      const resource = resourceUrl(req, path);
+      const settled = await verifyAndSettle(payment, resource);
       if (!settled.ok) return send(res, 402, { error: "payment failed", reason: settled.reason });
       const result = await liveCheck(slug);
-      return send(res, 200, { ...result, payment: { txHash: settled.txHash, payer: settled.payer, amount: "$0.01 USDC" } });
+      const receipt = { success: true, transaction: settled.txHash, network: settled.network, payer: settled.payer };
+      return send(res, 200, { ...result, payment: { txHash: settled.txHash, payer: settled.payer, amount: "$0.01 USDC" } },
+        { "PAYMENT-RESPONSE": Buffer.from(JSON.stringify(receipt)).toString("base64") });
     }
     return send(res, 404, { error: "not found", endpoints: ["/mints", "/mints/open", "/mints/:slug", "/live/:slug", "/openapi.json"] });
   } catch (e) {
