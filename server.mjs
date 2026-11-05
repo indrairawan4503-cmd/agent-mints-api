@@ -132,7 +132,7 @@ export async function handleRequest(req, res) {
     }
     if (path === "/openapi.json") {
       const spec = {
-        openapi: "3.0.3",
+        openapi: "3.1.0",
         info: { title: "Agent Mints API", version: "1.0.0", description: "Free-mint list for Binance Agent IDs on BNB Chain (chain 56). GET /live/:slug is a paid x402 endpoint ($0.01 USDC on Base, payTo 0x77d9525EB3A6c2CA804098f2E1535daC8B3DA5E6).", contact: { email: "indrairawan4503@gmail.com" } },
         servers: [{ url: "https://agent-mints-api.vercel.app" }],
         paths: {
@@ -141,7 +141,7 @@ export async function handleRequest(req, res) {
           "/mints/{slug}": { get: { operationId: "getMint", summary: "One mint by slug", parameters: [{ name: "slug", in: "path", required: true, schema: { type: "string" } }], responses: { 200: { description: "Mint detail" }, 404: { description: "Unknown slug" } } } },
           "/live/{slug}": {
             "x-payment-info": { price: { mode: "fixed", currency: "USD", amount: "0.010000" }, protocols: [{ x402: {} }] },
-            get: { operationId: "liveCheckMint", summary: "Live on-chain check for one mint (paid, x402 v2 $0.01 USDC on Base)", parameters: [{ name: "slug", in: "path", required: true, schema: { type: "string" } }], "x-payment-info": { price: { mode: "fixed", currency: "USD", amount: "0.010000" }, protocols: [{ x402: {} }] }, responses: { 200: { description: "Live status" }, 402: { description: "Payment Required — x402 v2. Send PAYMENT-SIGNATURE header with a signed EIP-3009 authorization for $0.01 USDC on Base to 0x77d9525EB3A6c2CA804098f2E1535daC8B3DA5E6.", content: { "application/json": { schema: { type: "object", properties: { x402Version: { type: "number", example: 2 }, error: { type: "string" }, resource: { type: "object" }, accepts: { type: "array", items: { type: "object" } } } } } } }, 404: { description: "Unknown slug" } } },
+            get: { operationId: "liveCheckMint", summary: "Live on-chain check for one mint (paid, x402 v2 $0.01 USDC on Base)", parameters: [{ name: "slug", in: "path", required: true, schema: { type: "string", example: "jin-agent" }, example: "jin-agent" }], "x-payment-info": { price: { mode: "fixed", currency: "USD", amount: "0.010000" }, protocols: [{ x402: {} }] }, responses: { 200: { description: "Live status" }, 402: { description: "Payment Required — x402 v2. Send PAYMENT-SIGNATURE header with a signed EIP-3009 authorization for $0.01 USDC on Base to 0x77d9525EB3A6c2CA804098f2E1535daC8B3DA5E6.", content: { "application/json": { schema: { type: "object", properties: { x402Version: { type: "number", example: 2 }, error: { type: "string" }, resource: { type: "object" }, accepts: { type: "array", items: { type: "object" } } } } } } }, 404: { description: "Unknown slug" } } },
           },
         },
       };
